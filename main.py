@@ -2,12 +2,13 @@ import telebot
 from telebot import types
 
 from database import add_communications, recovery_data, free_users, add_users, communications, delete_info, \
-    update_user_like, delete_user_from_db
+    update_user_like, delete_user_from_db, session
 from messages import m_is_connect, m_is_not_free_users, m_send_some_messages, dislike_str, like_str, m_play_again, \
     m_all_like, m_dislike_user_to, m_dislike_user, m_like, m_failed, m_good_bye, m_disconnect_user, m_start, \
     m_is_not_user_name, m_has_not_dialog
+from models import User
 
-access_token = '5701003292:AAGL3KLXvYb74EA86mQhChThXE_NMK8gliI'
+access_token = '5664043616:AAEdrBd551QLBPOGFyU_Q0tx8kIh6xOQq3Q'
 bot = telebot.TeleBot(access_token)
 
 
@@ -176,6 +177,38 @@ def echo(call):
 
         bot.send_message(user_id, m_is_connect, reply_markup=keyboard)
         bot.send_message(user_to_id, m_is_connect, reply_markup=keyboard)
+
+
+def get_all_users():
+    """Retrieve all user IDs from the database using SQLAlchemy."""
+    try:
+        users = session.query(User.id).all()
+        return [user[0] for user in users]
+    finally:
+        session.close()
+
+
+@bot.message_handler(commands=['send'])
+def send_mode(message):
+    """Enable the /send command to forward messages."""
+    bot.send_message(message.chat.id, "Please send the message you want to forward to all users.")
+
+    @bot.message_handler(content_types=['text', 'photo', 'video', 'document', 'audio'])
+    def forward_to_all(inner_message):
+        """Forward messages to all users."""
+        if inner_message.chat.type == 'private':  # Ensure private chat
+            user_id = inner_message.chat.id
+            user_ids = get_all_users()
+            for uid in user_ids:
+                if uid != user_id:  # Skip sender
+                    try:
+                        if inner_message.content_type == 'text':
+                            bot.send_message(uid, inner_message.text)
+                        else:
+                            bot.forward_message(uid, inner_message.chat.id, inner_message.message_id)
+                    except Exception as e:
+                        print(f"Could not forward to user {uid}: {e}")
+            bot.send_message(user_id, "Your message has been forwarded to all users!")
 
 
 if __name__ == '__main__':
